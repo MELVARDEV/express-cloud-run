@@ -1,13 +1,10 @@
 const router = require("express").Router();
 const fetch = require("node-fetch");
 const riotApiKey = process.env.riot_api_key;
-
-
+const Cache = require("../model/leagueApiCache")
 
 
 function parseRegion (requestRegion){
-
-
     let region = null;
    
     switch (requestRegion.toUpperCase()) {
@@ -68,9 +65,27 @@ router.get("/league/:region/:name",  async (req, res) => {
       return res.status(400).send('Region invalid');
   }
 
-  if(!region){
-      return res.status(400).send("Invalid region")
+  try {
+    let fetchedCache = await Cache.findOne({
+      endPoint: 'league',
+      region: region,
+      name: req.params.name,
+      timeFetched:  { $gte: new Date(Date.now() - process.env.CACHE_TIME*60 * 1000) }
+    }, {}, { sort: { 'created_at' : -1 } })
+  
+    if(fetchedCache){
+
+      let obj = JSON.parse(fetchedCache.jsonString)
+
+      obj.cached = true
+      delete obj.summonerName;
+  
+      return res.status(200).send(obj)
+    }
+  } catch (error) {
+    return res.status(400).send("Fetching cache failed")
   }
+
 
   fetch(
     `https://${region}.api.riotgames.com/lol/summoner/v4/summoners/by-name/${req.params.name}?api_key=${riotApiKey}`
@@ -87,12 +102,39 @@ router.get("/league/:region/:name",  async (req, res) => {
         .then((response) => response.json())
         .then((league) => {
 
-            
+      
+          let obj = league.find(x => x.queueType == 'RANKED_SOLO_5x5');
 
-          return res.status(200).send(league.find(x => x.queueType == 'RANKED_SOLO_5x5'));
+          
+          console.log(region, req.params.name, summoner, league)
+
+          let cache = new Cache({
+            jsonString: JSON.stringify(obj),
+            timeFetched: Date.now(),
+            endPoint: 'league',
+            region: region,
+            name: req.params.name
+          });
+
+          cache.save();
+
+          delete obj.summonerName;
+          
+         
+          obj.cached = false;
+          return res.status(200).send(obj);
         })
         .catch((err) => {
           console.trace(err);
+          let cache = new Cache({
+            jsonString: null,
+            timeFetched: Date.now(),
+            endPoint: 'league',
+            region: region,
+            name: req.params.name
+          });
+
+          cache.save();
           return res.status(400).send("error");
         });
     })
@@ -118,14 +160,66 @@ router.get("/summoner/:region/:name",  async (req, res) => {
       return res.status(400).send('Region invalid');
   }
 
+  try {
+    let fetchedCache = await Cache.findOne({
+      endPoint: 'summoner',
+      region: region,
+      name: req.params.name,
+      timeFetched:  { $gte: new Date(Date.now() - process.env.CACHE_TIME*60 * 1000) }
+    }, {}, { sort: { 'created_at' : -1 } })
+  
+    if(fetchedCache){
+
+      let obj = JSON.parse(fetchedCache.jsonString)
+
+      obj.cached = true
+  
+      return res.status(200).send(obj)
+    }
+  } catch (error) {
+    return res.status(400).send("Fetching cache failed")
+  }
+
+
 
   fetch(
     `https://${region}.api.riotgames.com/lol/summoner/v4/summoners/by-name/${req.params.name}?api_key=${riotApiKey}`
   )
     .then((response) => response.json())
-    .then((summoner) => res.status(200).send(summoner))
+    .then((summoner) => {
+
+      console.log(summoner)
+      if(!summoner.accountId){
+        throw new Error("Not found")
+      }
+
+      let cache = new Cache({
+        jsonString: JSON.stringify(summoner),
+        timeFetched: Date.now(),
+        endPoint: 'summoner',
+        region: region,
+        name: req.params.name
+      });
+      
+   
+
+      cache.save();
+
+      summoner.cached = false;
+      res.status(200).send(summoner)
+    })
     .catch((err) => {
       console.trace(err);
+      let cache = new Cache({
+        jsonString: null,
+        timeFetched: Date.now(),
+        endPoint: 'summoner',
+        region: region,
+        name: req.params.name
+      });
+      
+      cache.save();
+
       return res.status(400).send("error");
     });
 });

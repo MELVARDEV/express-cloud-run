@@ -2,7 +2,7 @@ const router = require("express").Router();
 const fetch = require("node-fetch");
 const riotApiKey = process.env.riot_api_key;
 const Cache = require("../model/leagueApiCache")
-
+const url = require("node:url")
 
 function parseRegion (requestRegion){
     let region = null;
@@ -86,9 +86,9 @@ router.get("/league/:region/:name",  async (req, res) => {
     return res.status(400).send("Fetching cache failed")
   }
 
-
+  const apiURL = new URL(`https://${region}.api.riotgames.com/lol/summoner/v4/summoners/by-name/${req.params.name}?api_key=${riotApiKey}`)
   fetch(
-    `https://${region}.api.riotgames.com/lol/summoner/v4/summoners/by-name/${req.params.name}?api_key=${riotApiKey}`
+    apiURL.toString()
   )
     .then((response) => response.json())
     .then((summoner) => {
@@ -106,7 +106,7 @@ router.get("/league/:region/:name",  async (req, res) => {
           let obj = league.find(x => x.queueType == 'RANKED_SOLO_5x5');
 
           
-          console.log(region, req.params.name, summoner, league)
+  
 
           let cache = new Cache({
             jsonString: JSON.stringify(obj),
@@ -177,18 +177,19 @@ router.get("/summoner/:region/:name",  async (req, res) => {
       return res.status(200).send(obj)
     }
   } catch (error) {
+    console.log(error)
     return res.status(400).send("Fetching cache failed")
   }
 
 
-
+  const apiURL = new URL(`https://${region}.api.riotgames.com/lol/summoner/v4/summoners/by-name/${req.params.name}?api_key=${riotApiKey}`)
   fetch(
-    `https://${region}.api.riotgames.com/lol/summoner/v4/summoners/by-name/${req.params.name}?api_key=${riotApiKey}`
+    apiURL.toString()
   )
     .then((response) => response.json())
     .then((summoner) => {
 
-      console.log(summoner)
+   
       if(!summoner.accountId){
         throw new Error("Not found")
       }

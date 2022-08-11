@@ -83,7 +83,7 @@ router.get("/league/:region/:name",  async (req, res) => {
       return res.status(200).send(obj)
     }
   } catch (error) {
-    return res.status(400).send("Fetching cache failed")
+    console.trace(error)
   }
 
   const apiURL = new URL(`https://${region}.api.riotgames.com/lol/summoner/v4/summoners/by-name/${req.params.name}?api_key=${riotApiKey}`)
@@ -135,7 +135,7 @@ router.get("/league/:region/:name",  async (req, res) => {
           });
 
           cache.save();
-          return res.status(400).send("error");
+          return res.status(400).send({});
         });
     })
     .catch((err) => {
@@ -178,7 +178,6 @@ router.get("/summoner/:region/:name",  async (req, res) => {
     }
   } catch (error) {
     console.log(error)
-    return res.status(400).send("Fetching cache failed")
   }
 
 
